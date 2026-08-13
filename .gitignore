@@ -1,0 +1,71 @@
+# ==========================================
+# CustomerPulse
+# ==========================================
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Python virtual environments
+venv/
+.venv/
+env/
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+
+# Operating system
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Temporary files
+*.tmp
+*.temp
+
+# ==========================================
+# CustomerPulse Data
+# ==========================================
+
+# Ignore generated and full datasets
+data/*.csv
+
+# Keep lightweight demo dataset
+!data/sample_customers.csv
+
+# Keep data documentation
+!data/*.xlsx
+
+# ==========================================
+# CustomerPulse Models
+# ==========================================
+
+# Large baseline model not required for demo
+models/baseline_model.joblib
+
+# Local AI coding instructions
+AGENTS.md
+CLAUDE.md
