@@ -1,0 +1,382 @@
+{
+  "encoder_version": "2.0",
+  "architecture": {
+    "engagement": 15,
+    "activity": 15,
+    "monetary": 15,
+    "frequency": 10,
+    "recency": 10,
+    "trend": 15,
+    "stability": 10,
+    "friction": 10
+  },
+  "total_dimensions": 100,
+  "customers": 30011,
+  "source_columns": 155,
+  "temporal_groups_detected": 42,
+  "populated_dimensions": 69,
+  "reserved_dimensions": 31,
+  "mapped_signals": {
+    "engagement": [
+      {
+        "dimension": 1,
+        "signal": "total_ic_mou",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 2,
+        "signal": "total_og_mou",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 3,
+        "signal": "vol_2g_mb",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 4,
+        "signal": "vol_3g_mb",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 5,
+        "signal": "total_ic_mou",
+        "statistic": "relative_change"
+      },
+      {
+        "dimension": 6,
+        "signal": "total_og_mou",
+        "statistic": "relative_change"
+      },
+      {
+        "dimension": 7,
+        "signal": "vol_2g_mb",
+        "statistic": "relative_change"
+      },
+      {
+        "dimension": 8,
+        "signal": "vol_3g_mb",
+        "statistic": "relative_change"
+      }
+    ],
+    "activity": [
+      {
+        "dimension": 1,
+        "signal": "loc_ic_mou",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 2,
+        "signal": "loc_og_mou",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 3,
+        "signal": "offnet_mou",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 4,
+        "signal": "onnet_mou",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 5,
+        "signal": "roam_ic_mou",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 6,
+        "signal": "roam_og_mou",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 7,
+        "signal": "std_ic_mou",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 8,
+        "signal": "std_og_mou",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 9,
+        "signal": "loc_ic_mou",
+        "statistic": "relative_change"
+      },
+      {
+        "dimension": 10,
+        "signal": "loc_og_mou",
+        "statistic": "relative_change"
+      },
+      {
+        "dimension": 11,
+        "signal": "offnet_mou",
+        "statistic": "relative_change"
+      },
+      {
+        "dimension": 12,
+        "signal": "onnet_mou",
+        "statistic": "relative_change"
+      },
+      {
+        "dimension": 13,
+        "signal": "roam_ic_mou",
+        "statistic": "relative_change"
+      },
+      {
+        "dimension": 14,
+        "signal": "roam_og_mou",
+        "statistic": "relative_change"
+      },
+      {
+        "dimension": 15,
+        "signal": "std_ic_mou",
+        "statistic": "relative_change"
+      }
+    ],
+    "monetary": [
+      {
+        "dimension": 1,
+        "signal": "arpu",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 2,
+        "signal": "last_day_rch_amt",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 3,
+        "signal": "max_rech_amt",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 4,
+        "signal": "total_rech_amt",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 5,
+        "signal": "arpu",
+        "statistic": "relative_change"
+      },
+      {
+        "dimension": 6,
+        "signal": "last_day_rch_amt",
+        "statistic": "relative_change"
+      },
+      {
+        "dimension": 7,
+        "signal": "max_rech_amt",
+        "statistic": "relative_change"
+      },
+      {
+        "dimension": 8,
+        "signal": "total_rech_amt",
+        "statistic": "relative_change"
+      }
+    ],
+    "frequency": [
+      {
+        "dimension": 1,
+        "signal": "monthly_2g",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 2,
+        "signal": "monthly_3g",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 3,
+        "signal": "sachet_2g",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 4,
+        "signal": "sachet_3g",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 5,
+        "signal": "total_rech_num",
+        "statistic": "current_level"
+      },
+      {
+        "dimension": 6,
+        "signal": "monthly_2g",
+        "statistic": "relative_change"
+      },
+      {
+        "dimension": 7,
+        "signal": "monthly_3g",
+        "statistic": "relative_change"
+      },
+      {
+        "dimension": 8,
+        "signal": "sachet_2g",
+        "statistic": "relative_change"
+      },
+      {
+        "dimension": 9,
+        "signal": "sachet_3g",
+        "statistic": "relative_change"
+      },
+      {
+        "dimension": 10,
+        "signal": "total_rech_num",
+        "statistic": "relative_change"
+      }
+    ],
+    "recency": [
+      {
+        "dimension": 1,
+        "signal": "date_of_last_rech_8_day",
+        "statistic": "recency_proxy"
+      },
+      {
+        "dimension": 2,
+        "signal": "date_of_last_rech_6_day",
+        "statistic": "recency_proxy"
+      },
+      {
+        "dimension": 3,
+        "signal": "date_of_last_rech_7_day",
+        "statistic": "recency_proxy"
+      }
+    ],
+    "trend": [
+      {
+        "dimension": 1,
+        "signal": "arpu",
+        "statistic": "june_to_august_trend"
+      },
+      {
+        "dimension": 2,
+        "signal": "total_rech_amt",
+        "statistic": "june_to_august_trend"
+      },
+      {
+        "dimension": 3,
+        "signal": "total_rech_num",
+        "statistic": "june_to_august_trend"
+      },
+      {
+        "dimension": 4,
+        "signal": "total_ic_mou",
+        "statistic": "june_to_august_trend"
+      },
+      {
+        "dimension": 5,
+        "signal": "total_og_mou",
+        "statistic": "june_to_august_trend"
+      },
+      {
+        "dimension": 6,
+        "signal": "vol_2g_mb",
+        "statistic": "june_to_august_trend"
+      },
+      {
+        "dimension": 7,
+        "signal": "vol_3g_mb",
+        "statistic": "june_to_august_trend"
+      },
+      {
+        "dimension": 8,
+        "signal": "onnet_mou",
+        "statistic": "june_to_august_trend"
+      },
+      {
+        "dimension": 9,
+        "signal": "offnet_mou",
+        "statistic": "june_to_august_trend"
+      },
+      {
+        "dimension": 10,
+        "signal": "loc_ic_mou",
+        "statistic": "june_to_august_trend"
+      },
+      {
+        "dimension": 11,
+        "signal": "loc_og_mou",
+        "statistic": "june_to_august_trend"
+      },
+      {
+        "dimension": 12,
+        "signal": "std_ic_mou",
+        "statistic": "june_to_august_trend"
+      },
+      {
+        "dimension": 13,
+        "signal": "std_og_mou",
+        "statistic": "june_to_august_trend"
+      },
+      {
+        "dimension": 14,
+        "signal": "monthly_2g",
+        "statistic": "june_to_august_trend"
+      },
+      {
+        "dimension": 15,
+        "signal": "monthly_3g",
+        "statistic": "june_to_august_trend"
+      }
+    ],
+    "stability": [
+      {
+        "dimension": 1,
+        "signal": "arpu",
+        "statistic": "temporal_volatility"
+      },
+      {
+        "dimension": 2,
+        "signal": "total_rech_amt",
+        "statistic": "temporal_volatility"
+      },
+      {
+        "dimension": 3,
+        "signal": "total_rech_num",
+        "statistic": "temporal_volatility"
+      },
+      {
+        "dimension": 4,
+        "signal": "total_ic_mou",
+        "statistic": "temporal_volatility"
+      },
+      {
+        "dimension": 5,
+        "signal": "total_og_mou",
+        "statistic": "temporal_volatility"
+      },
+      {
+        "dimension": 6,
+        "signal": "vol_2g_mb",
+        "statistic": "temporal_volatility"
+      },
+      {
+        "dimension": 7,
+        "signal": "vol_3g_mb",
+        "statistic": "temporal_volatility"
+      },
+      {
+        "dimension": 8,
+        "signal": "onnet_mou",
+        "statistic": "temporal_volatility"
+      },
+      {
+        "dimension": 9,
+        "signal": "offnet_mou",
+        "statistic": "temporal_volatility"
+      },
+      {
+        "dimension": 10,
+        "signal": "loc_ic_mou",
+        "statistic": "temporal_volatility"
+      }
+    ],
+    "friction": []
+  },
+  "design_note": "The 100-dimensional space is a fixed-capacity behavioural interface. Dimensions unsupported by the incoming schema remain reserved rather than being populated with fabricated signals."
+}

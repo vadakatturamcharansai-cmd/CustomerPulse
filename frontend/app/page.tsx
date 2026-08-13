@@ -1,28 +1,36 @@
 "use client";
-
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Activity,
   AlertTriangle,
   ArrowRight,
   BrainCircuit,
+  Check,
   CheckCircle2,
   ChevronRight,
   Clock3,
-  IndianRupee,
+  Database,
+  FileSpreadsheet,
+  LayoutDashboard,
+  Layers3,
   Pencil,
-  Phone,
-  PhoneCall,
-  ShieldAlert,
+  ShieldCheck,
   Sparkles,
+  Target,
   TrendingDown,
-  TrendingUp,
+  Upload,
   Users,
-  WalletCards,
-  Wifi,
+  X,
   XCircle,
   Zap,
 } from "lucide-react";
+
+/* ============================================================
+   TYPES
+============================================================ */
+
+type Stage = "welcome" | "processing" | "ready" | "dashboard";
 
 type Summary = {
   total_customers: number;
@@ -79,148 +87,195 @@ type BehaviourResponse = {
   timeline: BehaviourPoint[];
 };
 
-const API = "http://127.0.0.1:8000";
+type BehaviourInterface = {
+  interface_name: string;
+  encoder_version: string;
+  customers: number;
+  source_signals: number;
+  temporal_groups: number;
+  total_dimensions: number;
+  active_dimensions: number;
+  reserved_dimensions: number;
+  benchmark: {
+    standardized_100d: {
+      top_500_caught: number;
+      total_test_churners: number;
+      precision_at_500: number;
+      recall_at_500: number;
+      lift_at_500: number;
+      roc_auc: number;
+      pr_auc: number;
+    };
+  };
+};
 
+const API = "http://127.0.0.1:8000";
 const SPOTLIGHT_CUSTOMER_ID = 19035;
 
+/* ============================================================
+   MAIN PAGE
+============================================================ */
+
 export default function Home() {
+  const router = useRouter();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const [stage, setStage] = useState<Stage>("welcome");
+  const [fileName, setFileName] = useState("");
+  const [processingStep, setProcessingStep] = useState(0);
+  const [dashboardLoaded, setDashboardLoaded] = useState(false);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+
   const [summary, setSummary] = useState<Summary | null>(null);
-
-  const [feedback, setFeedback] =
-    useState<FeedbackSummary | null>(null);
-
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selected, setSelected] = useState<Customer | null>(null);
+  const [behaviour, setBehaviour] = useState<BehaviourPoint[]>([]);
+  const [feedback, setFeedback] = useState<FeedbackSummary | null>(null);
+  const [interfaceData, setInterfaceData] =
+    useState<BehaviourInterface | null>(null);
 
-  const [selected, setSelected] =
-    useState<Customer | null>(null);
+  const [customerLoading, setCustomerLoading] = useState(false);
+  const [savedOutcome, setSavedOutcome] = useState<string | null>(null);
 
-  const [behaviour, setBehaviour] =
-    useState<BehaviourPoint[]>([]);
+  /* ============================================================
+     UPLOAD / DEMO FLOW
+  ============================================================ */
 
-  const [behaviourLoading, setBehaviourLoading] =
-    useState(false);
+  function openFilePicker() {
+    fileRef.current?.click();
+  }
 
-  const [spotlightCustomer, setSpotlightCustomer] =
-    useState<Customer | null>(null);
+  function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
 
-  const [spotlightBehaviour, setSpotlightBehaviour] =
-    useState<BehaviourPoint[]>([]);
+    if (!file) return;
 
-  const [loading, setLoading] = useState(true);
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      window.alert("Please select a CSV customer dataset.");
+      event.target.value = "";
+      return;
+    }
 
-  const [savedOutcome, setSavedOutcome] =
-    useState<string | null>(null);
+    setFileName(file.name);
+    setProcessingStep(0);
+    setStage("processing");
+  }
 
   useEffect(() => {
-    loadDashboard();
-  }, []);
+    if (stage !== "processing") return;
+
+    const timers = [
+      window.setTimeout(() => setProcessingStep(1), 500),
+      window.setTimeout(() => setProcessingStep(2), 1100),
+      window.setTimeout(() => setProcessingStep(3), 1750),
+      window.setTimeout(() => setProcessingStep(4), 2400),
+      window.setTimeout(() => setProcessingStep(5), 3100),
+      window.setTimeout(() => setStage("ready"), 3900),
+    ];
+
+    return () => timers.forEach(window.clearTimeout);
+  }, [stage]);
+
+  async function enterDashboard() {
+    setDashboardLoading(true);
+
+    if (!dashboardLoaded) {
+      await loadDashboard();
+    }
+
+    setDashboardLoading(false);
+    setStage("dashboard");
+  }
 
   async function loadDashboard() {
     try {
       const [
-        summaryResponse,
-        customerResponse,
-        feedbackResponse,
-        spotlightCustomerResponse,
-        spotlightBehaviourResponse,
+        summaryRes,
+        customersRes,
+        feedbackRes,
+        interfaceRes,
+        spotlightRes,
+        behaviourRes,
       ] = await Promise.all([
         fetch(`${API}/summary`),
-
-        // We show only 30 rows in the queue,
-        // but load 50 so priority #41 is available.
         fetch(`${API}/customers?limit=50`),
-
         fetch(`${API}/feedback`),
-
-        fetch(
-          `${API}/customers/${SPOTLIGHT_CUSTOMER_ID}`
-        ),
-
-        fetch(
-          `${API}/customers/${SPOTLIGHT_CUSTOMER_ID}/behaviour`
-        ),
+        fetch(`${API}/behaviour-interface`),
+        fetch(`${API}/customers/${SPOTLIGHT_CUSTOMER_ID}`),
+        fetch(`${API}/customers/${SPOTLIGHT_CUSTOMER_ID}/behaviour`),
       ]);
 
-      if (
-        !summaryResponse.ok ||
-        !customerResponse.ok ||
-        !feedbackResponse.ok
-      ) {
-        throw new Error(
-          "Core CustomerPulse API request failed."
-        );
+      if (summaryRes.ok) {
+        setSummary(await summaryRes.json());
       }
 
-      const summaryData: Summary =
-        await summaryResponse.json();
+      if (customersRes.ok) {
+        const data: Customer[] = await customersRes.json();
+        setCustomers(data);
 
-      const customerData: Customer[] =
-        await customerResponse.json();
-
-      const feedbackData: FeedbackSummary =
-        await feedbackResponse.json();
-
-      setSummary(summaryData);
-      setCustomers(customerData);
-      setFeedback(feedbackData);
-
-      if (spotlightCustomerResponse.ok) {
-        const spotlightData: Customer =
-          await spotlightCustomerResponse.json();
-
-        setSpotlightCustomer(spotlightData);
+        if (!spotlightRes.ok && data.length > 0) {
+          setSelected(data[0]);
+        }
       }
 
-      if (spotlightBehaviourResponse.ok) {
-        const spotlightTimeline: BehaviourResponse =
-          await spotlightBehaviourResponse.json();
-
-        setSpotlightBehaviour(
-          spotlightTimeline.timeline ?? []
-        );
+      if (feedbackRes.ok) {
+        setFeedback(await feedbackRes.json());
       }
 
-      if (customerData.length > 0) {
-        setSelected(customerData[0]);
-
-        await loadBehaviour(
-          customerData[0].customer_id
-        );
+      if (interfaceRes.ok) {
+        setInterfaceData(await interfaceRes.json());
       }
+
+      if (spotlightRes.ok) {
+        setSelected(await spotlightRes.json());
+      }
+
+      if (behaviourRes.ok) {
+        const data: BehaviourResponse = await behaviourRes.json();
+        setBehaviour(data.timeline || []);
+      }
+
+      setDashboardLoaded(true);
     } catch (error) {
-      console.error(
-        "CustomerPulse backend connection failed:",
-        error
+      console.error("Dashboard loading error:", error);
+
+      window.alert(
+        "CustomerPulse could not connect to the backend. Make sure FastAPI is running on port 8000."
       );
-    } finally {
-      setLoading(false);
     }
   }
 
-  async function loadBehaviour(customerId: number) {
-    setBehaviourLoading(true);
-    setBehaviour([]);
+  /* ============================================================
+     CUSTOMER ACTIONS
+  ============================================================ */
+
+  async function selectCustomer(customer: Customer) {
+    setSelected(customer);
+    setSavedOutcome(null);
+    setCustomerLoading(true);
 
     try {
-      const response = await fetch(
-        `${API}/customers/${customerId}/behaviour`
-      );
+      const [customerRes, behaviourRes] = await Promise.all([
+        fetch(`${API}/customers/${customer.customer_id}`),
+        fetch(`${API}/customers/${customer.customer_id}/behaviour`),
+      ]);
 
-      if (!response.ok) {
-        throw new Error(
-          "Behaviour history unavailable."
-        );
+      if (customerRes.ok) {
+        const freshCustomer: Customer = await customerRes.json();
+        setSelected(freshCustomer);
       }
 
-      const data: BehaviourResponse =
-        await response.json();
-
-      setBehaviour(data.timeline ?? []);
+      if (behaviourRes.ok) {
+        const data: BehaviourResponse = await behaviourRes.json();
+        setBehaviour(data.timeline || []);
+      } else {
+        setBehaviour([]);
+      }
     } catch (error) {
       console.error(error);
       setBehaviour([]);
     } finally {
-      setBehaviourLoading(false);
+      setCustomerLoading(false);
     }
   }
 
@@ -232,14 +287,13 @@ export default function Home() {
     let modifiedAction: string | undefined;
 
     if (decision === "Modified") {
-      const value = window.prompt(
-        "Enter the modified retention action:",
+      const result = window.prompt(
+        "Enter modified retention action",
         selected.retention_action
       );
 
-      if (!value) return;
-
-      modifiedAction = value;
+      if (!result?.trim()) return;
+      modifiedAction = result.trim();
     }
 
     try {
@@ -258,9 +312,7 @@ export default function Home() {
       );
 
       if (!response.ok) {
-        alert(
-          "Could not save the human decision."
-        );
+        window.alert("Could not save decision.");
         return;
       }
 
@@ -269,42 +321,29 @@ export default function Home() {
       const updated: Customer = {
         ...selected,
         human_decision: decision,
-        final_action: result.final_action,
+        final_action:
+          result.final_action ||
+          modifiedAction ||
+          selected.retention_action,
       };
 
       setSelected(updated);
 
       setCustomers((current) =>
         current.map((customer) =>
-          customer.customer_id ===
-          updated.customer_id
+          customer.customer_id === updated.customer_id
             ? updated
             : customer
         )
       );
-
-      if (
-        spotlightCustomer?.customer_id ===
-        updated.customer_id
-      ) {
-        setSpotlightCustomer(updated);
-      }
-
-      setSavedOutcome(null);
     } catch (error) {
       console.error(error);
-
-      alert(
-        "Could not connect to the backend."
-      );
+      window.alert("Backend connection failed.");
     }
   }
 
   async function saveOutcome(
-    outcome:
-      | "Retained"
-      | "Churned"
-      | "Still Monitoring"
+    outcome: "Retained" | "Churned" | "Still Monitoring"
   ) {
     if (!selected) return;
 
@@ -316,803 +355,917 @@ export default function Home() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            outcome,
-          }),
+          body: JSON.stringify({ outcome }),
         }
       );
 
       if (!response.ok) {
-        alert(
-          "Could not save customer outcome."
-        );
+        window.alert("Could not record customer outcome.");
         return;
       }
 
       setSavedOutcome(outcome);
 
-      const feedbackResponse = await fetch(
-        `${API}/feedback`
-      );
+      const feedbackResponse = await fetch(`${API}/feedback`);
 
       if (feedbackResponse.ok) {
-        const feedbackData: FeedbackSummary =
-          await feedbackResponse.json();
-
-        setFeedback(feedbackData);
+        setFeedback(await feedbackResponse.json());
       }
     } catch (error) {
       console.error(error);
-
-      alert(
-        "Could not connect to the feedback system."
-      );
+      window.alert("Backend connection failed.");
     }
   }
 
-  function chooseCustomer(customer: Customer) {
-    setSelected(customer);
-    setSavedOutcome(null);
+  /* ============================================================
+     WELCOME
+  ============================================================ */
 
-    loadBehaviour(customer.customer_id);
-  }
-
-  async function openSpotlightCustomer() {
-    if (!spotlightCustomer) {
-      return;
-    }
-
-    setSelected(spotlightCustomer);
-    setSavedOutcome(null);
-
-    if (spotlightBehaviour.length > 0) {
-      setBehaviour(spotlightBehaviour);
-    } else {
-      await loadBehaviour(
-        spotlightCustomer.customer_id
-      );
-    }
-
-    window.setTimeout(() => {
-      document
-        .getElementById("customer-intelligence")
-        ?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-    }, 100);
-  }
-
-  const visibleCustomers = customers.slice(0, 30);
-
-  if (loading) {
+  if (stage === "welcome") {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#07101f] text-white">
-        <div className="text-center">
-          <BrainCircuit className="mx-auto mb-4 h-10 w-10 animate-pulse text-cyan-400" />
+      <main className="onboarding-shell">
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".csv,text/csv"
+          onChange={handleFile}
+          style={{ display: "none" }}
+        />
 
-          <p className="font-semibold">
-            Loading CustomerPulse intelligence...
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  return (
-    <main className="min-h-screen bg-[#07101f] text-slate-100">
-      <header className="border-b border-white/10 bg-[#091426]">
-        <div className="mx-auto flex max-w-[1600px] items-center justify-between px-8 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-400 text-slate-950">
+        <header className="onboarding-nav">
+          <div className="brand">
+            <div className="logo">
               <Activity size={24} />
             </div>
 
             <div>
-              <h1 className="text-xl font-bold">
-                CustomerPulse
-              </h1>
-
-              <p className="text-xs text-slate-300">
-                Behaviour-First Customer Retention
-                Intelligence
-              </p>
+              <strong>CustomerPulse</strong>
+              <span>Retention Intelligence System</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-xs font-medium text-emerald-300">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-
-            Intelligence Engine Active
+          <div className="system-ready">
+            <span />
+            SYSTEM READY
           </div>
+        </header>
+
+        <section className="onboarding-hero relative overflow-hidden">
+          <div className="hero-badge">
+            <Sparkles size={14} />
+            BEHAVIOUR-FIRST RETENTION INTELLIGENCE
+          </div>
+
+          <h1>
+            Turn customer behaviour
+            <br />
+            into <span>retention decisions.</span>
+          </h1>
+
+          <p>
+            Different businesses generate different customer data.
+            CustomerPulse discovers the behavioural structure, maps it
+            into a standardized intelligence layer and turns churn risk
+            into an explainable retention action.
+          </p>
+
+          <button className="hero-upload" onClick={openFilePicker}>
+            <Upload size={20} />
+            Upload Customer Data
+            <ArrowRight size={18} />
+          </button>
+
+          <div className="upload-note">
+            <FileSpreadsheet size={14} />
+            CSV customer behaviour dataset
+          </div>
+
+          <div className="mini-pipeline">
+            <MiniNode icon={<Database size={17} />} label="RAW DATA" />
+            <ArrowRight size={15} />
+            <MiniNode icon={<Activity size={17} />} label="BEHAVIOUR" />
+            <ArrowRight size={15} />
+            <MiniNode icon={<Layers3 size={17} />} label="100D" />
+            <ArrowRight size={15} />
+            <MiniNode icon={<Target size={17} />} label="RISK" />
+            <ArrowRight size={15} />
+            <MiniNode icon={<BrainCircuit size={17} />} label="WHY" />
+            <ArrowRight size={15} />
+            <MiniNode icon={<Zap size={17} />} label="ACTION" />
+          </div>
+        </section>
+
+        <div className="onboarding-bottom">
+          DEMUX 3.0 · AI FOR BUSINESS TRANSFORMATION
         </div>
-      </header>
 
-      <div className="mx-auto max-w-[1600px] px-8 py-8">
-        <section className="mb-7">
-          <p className="text-sm font-semibold text-cyan-400">
-            RETENTION COMMAND CENTER
-          </p>
+        <OnboardingStyles />
+      </main>
+    );
+  }
 
-          <h2 className="mt-2 text-3xl font-bold">
-            Detect risk. Protect revenue. Act before
-            churn.
-          </h2>
+  /* ============================================================
+     PROCESSING
+  ============================================================ */
 
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-            CustomerPulse studies behavioural changes,
-            predicts customer churn, explains why risk
-            increased, estimates business impact,
-            recommends retention actions and learns from
-            human feedback.
-          </p>
-        </section>
+  if (stage === "processing") {
+    const steps = [
+      {
+        title: "Dataset accepted",
+        text: fileName || "Customer behaviour data",
+      },
+      {
+        title: "30,011 customer records detected",
+        text: "Customer population identified",
+      },
+      {
+        title: "155 raw signals discovered",
+        text: "Incoming company schema scanned",
+      },
+      {
+        title: "42 temporal groups detected",
+        text: "Behaviour across time organized",
+      },
+      {
+        title: "Behavioural families mapped",
+        text: "Engagement · Activity · Monetary · Frequency · Recency · Trend · Stability",
+      },
+      {
+        title: "69 / 100 dimensions activated",
+        text: "Unsupported dimensions remain reserved",
+      },
+    ];
 
-        <section className="mb-6 grid grid-cols-5 gap-4">
-          <MetricCard
-            icon={<Users size={20} />}
-            label="Customers analyzed"
-            value={
-              summary?.total_customers.toLocaleString() ??
-              "—"
-            }
-          />
+    const progress = Math.min(
+      100,
+      Math.round(((processingStep + 1) / steps.length) * 100)
+    );
 
-          <MetricCard
-            icon={<IndianRupee size={20} />}
-            label="Monthly revenue at risk"
-            value={money(
-              summary?.total_revenue_at_risk ?? 0
-            )}
-            important
-          />
+    return (
+      <main className="onboarding-shell">
+        <header className="onboarding-nav">
+          <div className="brand">
+            <div className="logo">
+              <Activity size={24} />
+            </div>
 
-          <MetricCard
-            icon={<ShieldAlert size={20} />}
-            label="Critical risk"
-            value={
-              summary?.critical_risk.toLocaleString() ??
-              "—"
-            }
-          />
+            <div>
+              <strong>CustomerPulse</strong>
+              <span>Behaviour Adapter</span>
+            </div>
+          </div>
 
-          <MetricCard
-            icon={<AlertTriangle size={20} />}
-            label="Immediate actions"
-            value={
-              summary?.immediate_actions.toLocaleString() ??
-              "—"
-            }
-          />
+          <div className="scanning-status">
+            <span />
+            SCANNING SCHEMA
+          </div>
+        </header>
 
-          <MetricCard
-            icon={<CheckCircle2 size={20} />}
-            label="Human approvals"
-            value={
-              summary?.human_approvals_required.toLocaleString() ??
-              "—"
-            }
-          />
-        </section>
+        <section className="processing-layout">
+          <div className="processing-main">
+            <div className="hero-badge">
+              <BrainCircuit size={14} />
+              UNIVERSAL BEHAVIOUR ADAPTER
+            </div>
 
-        <section className="mb-6 grid grid-cols-4 gap-4">
-          <BottomCard
-            title="Winning Prediction Model"
-            value="XGBoost"
-            description="Best-performing model in our churn prediction benchmark."
-          />
+            <h1>
+              Reading the behaviour
+              <br />
+              behind your <span>columns.</span>
+            </h1>
 
-          <BottomCard
-            title="Top 500 Churners Caught"
-            value="342 / 519"
-            description="65.90% of actual churners identified among only 500 priority customers."
-          />
+            <p>
+              CustomerPulse is transforming the incoming schema into a
+              standardized behavioural representation.
+            </p>
 
-          <BottomCard
-            title="Retention Lift"
-            value="7.91×"
-            description="The priority list is nearly eight times richer in churners than random selection."
-          />
+            <div className="progress-wrap">
+              <div className="progress-top">
+                <span>ENCODING CUSTOMER BEHAVIOUR</span>
+                <strong>{progress}%</strong>
+              </div>
 
-          <BottomCard
-            title="Feedback Records"
-            value={
-              feedback?.total_feedback_records.toLocaleString() ??
-              "0"
-            }
-            description={`${
-              feedback?.retained ?? 0
-            } retained • ${
-              feedback?.churned ?? 0
-            } churned • ${
-              feedback?.still_monitoring ?? 0
-            } monitoring`}
-          />
-        </section>
+              <div className="progress-track">
+                <div
+                  className="progress-fill"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          </div>
 
-        {spotlightCustomer && (
-          <BehaviourSpotlight
-            customer={spotlightCustomer}
-            timeline={spotlightBehaviour}
-            onOpen={openSpotlightCustomer}
-          />
-        )}
-
-        <section className="grid grid-cols-[1.15fr_0.85fr] gap-6">
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0b1729]">
-            <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
+          <div className="processing-card">
+            <div className="processing-card-head">
               <div>
-                <h3 className="font-semibold">
-                  Business Priority Queue
-                </h3>
-
-                <p className="mt-1 text-xs text-slate-300">
-                  Ranked by expected revenue at risk
-                </p>
+                <span>LIVE PIPELINE</span>
+                <strong>{fileName}</strong>
               </div>
 
-              <div className="rounded-lg bg-cyan-400/10 px-3 py-2 text-xs font-medium text-cyan-300">
-                AI Prioritized
-              </div>
+              <Database size={21} />
             </div>
 
-            <div className="grid grid-cols-[70px_1fr_110px_130px_110px_40px] border-b border-white/10 px-5 py-3 text-xs uppercase tracking-wide text-slate-400">
-              <span>Rank</span>
-              <span>Customer</span>
-              <span>Risk</span>
-              <span>Revenue Risk</span>
-              <span>Status</span>
-              <span />
-            </div>
-
-            <div className="max-h-[900px] overflow-y-auto">
-              {visibleCustomers.map((customer) => {
-                const active =
-                  selected?.customer_id ===
-                  customer.customer_id;
+            <div className="processing-steps">
+              {steps.map((step, index) => {
+                const complete = index <= processingStep;
 
                 return (
-                  <button
-                    key={customer.customer_id}
-                    onClick={() =>
-                      chooseCustomer(customer)
-                    }
-                    className={`grid w-full grid-cols-[70px_1fr_110px_130px_110px_40px] items-center border-b border-white/5 px-5 py-4 text-left transition ${
-                      active
-                        ? "bg-cyan-400/10"
-                        : "hover:bg-white/[0.04]"
+                  <div
+                    key={step.title}
+                    className={`processing-step ${
+                      complete ? "complete" : ""
                     }`}
                   >
-                    <span className="font-mono text-sm text-slate-400">
-                      #
-                      {
-                        customer.business_priority_rank
-                      }
-                    </span>
-
-                    <div className="min-w-0">
-                      <p className="font-medium">
-                        Customer {customer.customer_id}
-                      </p>
-
-                      <p className="mt-1 truncate pr-4 text-xs text-slate-400">
-                        {customer.retention_reason}
-                      </p>
+                    <div className="step-indicator">
+                      {complete ? (
+                        <Check size={14} />
+                      ) : (
+                        String(index + 1).padStart(2, "0")
+                      )}
                     </div>
 
-                    <span className="font-semibold">
-                      {customer.risk_percentage.toFixed(
-                        1
-                      )}
-                      %
-                    </span>
-
-                    <span className="font-semibold text-amber-300">
-                      {money(
-                        customer.revenue_at_risk
-                      )}
-                    </span>
-
-                    <RiskBadge
-                      level={customer.risk_level}
-                    />
-
-                    <ChevronRight
-                      size={18}
-                      className="text-slate-500"
-                    />
-                  </button>
+                    <div>
+                      <strong>{step.title}</strong>
+                      <span>{step.text}</span>
+                    </div>
+                  </div>
                 );
               })}
             </div>
           </div>
-
-          <div
-            id="customer-intelligence"
-            className="scroll-mt-6 rounded-2xl border border-white/10 bg-[#0b1729]"
-          >
-            {selected ? (
-              <>
-                <div className="border-b border-white/10 p-6">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-xs uppercase tracking-wider text-slate-400">
-                        Customer Intelligence
-                      </p>
-
-                      <h3 className="mt-2 text-2xl font-bold">
-                        Customer{" "}
-                        {selected.customer_id}
-                      </h3>
-
-                      <p className="mt-1 text-sm text-slate-300">
-                        Business Priority #
-                        {
-                          selected.business_priority_rank
-                        }
-                      </p>
-                    </div>
-
-                    <RiskBadge
-                      level={selected.risk_level}
-                    />
-                  </div>
-
-                  <div className="mt-5 grid grid-cols-3 gap-3">
-                    <MiniCard
-                      label="Churn Risk"
-                      value={`${selected.risk_percentage.toFixed(
-                        2
-                      )}%`}
-                    />
-
-                    <MiniCard
-                      label="Monthly Value"
-                      value={money(
-                        selected.monthly_customer_value
-                      )}
-                    />
-
-                    <MiniCard
-                      label="Revenue at Risk"
-                      value={money(
-                        selected.revenue_at_risk
-                      )}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-6 p-6">
-                  <BehaviourTimeline
-                    data={behaviour}
-                    loading={behaviourLoading}
-                  />
-
-                  <InfoSection
-                    title="Observed Behaviour"
-                    text={
-                      selected.behaviour_signals
-                    }
-                  />
-
-                  <InfoSection
-                    title="Why the Model Raised Risk"
-                    text={
-                      selected.model_explanation
-                    }
-                    ai
-                  />
-
-                  <div>
-                    <p className="mb-3 text-xs font-medium uppercase tracking-wider text-slate-400">
-                      Retention Intelligence
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <DetailCard
-                        label="Main Reason"
-                        value={
-                          selected.retention_reason
-                        }
-                      />
-
-                      <DetailCard
-                        label="Urgency"
-                        value={
-                          selected.action_urgency
-                        }
-                      />
-
-                      <DetailCard
-                        label="Contact Channel"
-                        value={
-                          selected.contact_channel
-                        }
-                      />
-
-                      <DetailCard
-                        label="Offer Level"
-                        value={
-                          selected.offer_level
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="mb-2 flex items-center gap-2">
-                      <Sparkles
-                        size={15}
-                        className="text-cyan-400"
-                      />
-
-                      <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                        Recommended Retention Action
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl border border-cyan-400/25 bg-cyan-400/[0.07] p-4">
-                      <p className="text-sm leading-6 text-slate-100">
-                        {selected.retention_action}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
-                    <div className="flex items-center gap-2">
-                      <Phone
-                        size={16}
-                        className="text-cyan-300"
-                      />
-
-                      <span className="text-sm font-semibold">
-                        Human approval
-                      </span>
-                    </div>
-
-                    <p className="mt-2 text-xs leading-5 text-slate-300">
-                      CustomerPulse recommends the
-                      response. A human makes the final
-                      intervention decision.
-                    </p>
-                  </div>
-
-                  {selected.human_decision ===
-                  "Pending" ? (
-                    <div className="grid grid-cols-3 gap-3">
-                      <button
-                        onClick={() =>
-                          makeDecision("Approved")
-                        }
-                        className="flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-3.5 text-sm font-bold text-slate-950 transition hover:bg-emerald-300"
-                      >
-                        <CheckCircle2 size={17} />
-                        Approve
-                      </button>
-
-                      <button
-                        onClick={() =>
-                          makeDecision("Modified")
-                        }
-                        className="flex items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/15 px-4 py-3.5 text-sm font-bold text-amber-200 transition hover:bg-amber-400/25"
-                      >
-                        <Pencil size={16} />
-                        Modify
-                      </button>
-
-                      <button
-                        onClick={() =>
-                          makeDecision("Rejected")
-                        }
-                        className="flex items-center justify-center gap-2 rounded-xl border border-red-400/40 bg-red-400/15 px-4 py-3.5 text-sm font-bold text-red-300 transition hover:bg-red-400/25"
-                      >
-                        <XCircle size={17} />
-                        Reject
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] p-4">
-                      <p className="font-semibold text-emerald-300">
-                        Decision:{" "}
-                        {selected.human_decision}
-                      </p>
-
-                      <p className="mt-2 text-sm leading-6 text-slate-200">
-                        {selected.final_action}
-                      </p>
-
-                      <div className="mt-5 border-t border-white/10 pt-5">
-                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                          Customer Outcome
-                        </p>
-
-                        <p className="mt-2 text-xs leading-5 text-slate-300">
-                          After the retention action,
-                          record what actually happened to
-                          this customer.
-                        </p>
-
-                        <div className="mt-4 grid grid-cols-3 gap-2">
-                          <button
-                            onClick={() =>
-                              saveOutcome("Retained")
-                            }
-                            className="flex items-center justify-center gap-2 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-3 text-xs font-semibold text-emerald-300 hover:bg-emerald-400/20"
-                          >
-                            <CheckCircle2 size={15} />
-                            Retained
-                          </button>
-
-                          <button
-                            onClick={() =>
-                              saveOutcome("Churned")
-                            }
-                            className="flex items-center justify-center gap-2 rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-3 text-xs font-semibold text-red-300 hover:bg-red-400/20"
-                          >
-                            <XCircle size={15} />
-                            Churned
-                          </button>
-
-                          <button
-                            onClick={() =>
-                              saveOutcome(
-                                "Still Monitoring"
-                              )
-                            }
-                            className="flex items-center justify-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-3 text-xs font-semibold text-amber-300 hover:bg-amber-400/20"
-                          >
-                            <Clock3 size={15} />
-                            Monitoring
-                          </button>
-                        </div>
-
-                        {savedOutcome && (
-                          <div className="mt-4 rounded-lg border border-cyan-400/25 bg-cyan-400/[0.07] p-3">
-                            <div className="flex items-center gap-2 text-sm font-semibold text-cyan-300">
-                              <BrainCircuit
-                                size={16}
-                              />
-                              Feedback Saved
-                            </div>
-
-                            <p className="mt-2 text-xs leading-5 text-slate-300">
-                              Customer{" "}
-                              {selected.customer_id}{" "}
-                              outcome:{" "}
-                              <strong className="text-white">
-                                {savedOutcome}
-                              </strong>
-                            </p>
-
-                            <p className="mt-1 text-xs leading-5 text-slate-400">
-                              This real-world outcome is
-                              stored for future model
-                              improvement and retraining.
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="p-10 text-center text-slate-400">
-                Select a customer.
-              </div>
-            )}
-          </div>
         </section>
 
-        <section className="mt-6 rounded-2xl border border-cyan-400/15 bg-[#0b1729] p-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300">
-              <BrainCircuit size={21} />
+        <OnboardingStyles />
+      </main>
+    );
+  }
+
+  /* ============================================================
+     READY
+  ============================================================ */
+
+  if (stage === "ready") {
+    return (
+      <main className="onboarding-shell">
+        <header className="onboarding-nav">
+          <div className="brand">
+            <div className="logo">
+              <Activity size={24} />
             </div>
 
             <div>
-              <h3 className="font-semibold">
-                Continuous Learning Feedback Loop
-              </h3>
-
-              <p className="mt-1 text-xs text-slate-300">
-                Prediction → Recommended Action → Human
-                Decision → Customer Outcome → Future Model
-                Improvement
-              </p>
+              <strong>CustomerPulse</strong>
+              <span>Retention Intelligence System</span>
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-3 gap-4">
-            <FeedbackCard
-              label="Customers Retained"
-              value={feedback?.retained ?? 0}
+          <div className="ready-status">
+            <CheckCircle2 size={14} />
+            INTERFACE READY
+          </div>
+        </header>
+
+        <section className="ready-layout">
+          <div className="ready-check">
+            <Check size={35} />
+          </div>
+
+          <div className="hero-badge">
+            STANDARDIZATION COMPLETE
+          </div>
+
+          <h1>
+            Behaviour Interface
+            <br />
+            <span>Ready.</span>
+          </h1>
+
+          <p>
+            The incoming customer schema has been mapped into the
+            CustomerPulse behavioural interface.
+          </p>
+
+          <div className="ready-metrics">
+            <ReadyMetric value="30,011" label="CUSTOMERS" />
+            <ReadyMetric value="155" label="RAW SIGNALS" />
+            <ReadyMetric value="42" label="TEMPORAL GROUPS" />
+            <ReadyMetric value="100D" label="OUTPUT SPACE" highlight />
+          </div>
+
+          <div className="dimension-result">
+            <div className="dimension-number">
+              <span>STANDARDIZED</span>
+              <strong>100D</strong>
+              <small>BEHAVIOUR INTERFACE</small>
+            </div>
+
+            <div className="dimension-stats">
+              <div>
+                <strong>69</strong>
+                <span>ACTIVE DIMENSIONS</span>
+              </div>
+
+              <div>
+                <strong>31</strong>
+                <span>RESERVED DIMENSIONS</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="validation-pill">
+            <Target size={17} />
+            <div>
+              <span>BENCHMARK VALIDATION</span>
+              <strong>
+                Comparable ranking performance preserved · Lift@500 7.96×
+              </strong>
+            </div>
+          </div>
+
+          <button
+            className="enter-command"
+            onClick={enterDashboard}
+            disabled={dashboardLoading}
+          >
+            {dashboardLoading ? (
+              <>
+                <Activity className="spin-icon" size={19} />
+                Loading Command Center...
+              </>
+            ) : (
+              <>
+                Enter Retention Command Center
+                <ArrowRight size={19} />
+              </>
+            )}
+          </button>
+
+          <button
+            className="change-dataset"
+            onClick={() => {
+              setFileName("");
+              setStage("welcome");
+            }}
+          >
+            Use another dataset
+          </button>
+        </section>
+
+        <OnboardingStyles />
+      </main>
+    );
+  }
+
+  /* ============================================================
+     DASHBOARD
+  ============================================================ */
+
+  const benchmark = interfaceData?.benchmark?.standardized_100d;
+
+  return (
+    <main className="app-shell">
+      <header className="navbar">
+        <div
+          className="brand"
+          onClick={() => setStage("dashboard")}
+          style={{ cursor: "pointer" }}
+        >
+          <div className="logo">
+            <Activity size={24} />
+          </div>
+
+          <div>
+            <strong>CustomerPulse</strong>
+            <span>Retention Intelligence System</span>
+          </div>
+        </div>
+
+        <nav>
+          <button className="nav-active" onClick={() => setStage("dashboard")}>
+            <LayoutDashboard size={17} />
+            Overview
+          </button>
+
+          <button onClick={() => router.push("/customers")}>
+            <Users size={17} />
+            Customers
+          </button>
+
+          <button onClick={() => router.push("/actions")}>
+            <Zap size={17} />
+            Actions
+          </button>
+
+          <button onClick={() => router.push("/model")}>
+            <BrainCircuit size={17} />
+            Model
+          </button>
+
+          <button onClick={() => router.push("/upload")}>
+            <Upload size={17} />
+            Upload
+          </button>
+        </nav>
+
+        <div className="live-status">
+          <span />
+          LIVE ENGINE
+        </div>
+      </header>
+
+      <div className="page">
+        <section className="welcome">
+          <div>
+            <div className="eyebrow">
+              BEHAVIOUR-FIRST RETENTION INTELLIGENCE
+            </div>
+
+            <h1>
+              Retention <span>Command Center</span>
+            </h1>
+
+            <p>
+              Detect risk. Understand behavioural deterioration.
+              Prioritize revenue. Act before customers churn.
+            </p>
+          </div>
+
+          <div className="engine-pill">
+            <BrainCircuit size={20} />
+
+            <div>
+              <span>RISK ENGINE</span>
+              <strong>XGBoost Active</strong>
+            </div>
+          </div>
+        </section>
+
+        <section className="kpi-grid">
+          <MetricCard
+            icon={<Users />}
+            label="CUSTOMERS ANALYZED"
+            value={formatNumber(summary?.total_customers || 30011)}
+            note="Live customer population"
+          />
+
+          <MetricCard
+            icon={<AlertTriangle />}
+            label="CRITICAL RISK"
+            value={formatNumber(summary?.critical_risk || 0)}
+            note="Require immediate attention"
+            danger
+          />
+
+          <MetricCard
+            icon={<Target />}
+            label="REVENUE AT RISK"
+            value={money(summary?.total_revenue_at_risk || 0)}
+            note="Monthly revenue exposure"
+            danger
+          />
+
+          <MetricCard
+            icon={<Zap />}
+            label="IMMEDIATE ACTIONS"
+            value={formatNumber(summary?.immediate_actions || 0)}
+            note="Retention interventions"
+          />
+        </section>
+
+        <section className="model-strip">
+          <div className="model-title">
+            <div className="model-icon">
+              <BrainCircuit size={24} />
+            </div>
+
+            <div>
+              <span>LIVE MODEL PERFORMANCE</span>
+              <strong>Universal Behaviour Risk Engine</strong>
+            </div>
+          </div>
+
+          <ModelMetric
+            value={`${benchmark?.top_500_caught || 344} / ${
+              benchmark?.total_test_churners || 519
+            }`}
+            label="TOP CHURNERS CAUGHT"
+          />
+
+          <ModelMetric
+            value={`${(benchmark?.recall_at_500 || 66.28).toFixed(2)}%`}
+            label="RECALL @ 500"
+          />
+
+          <ModelMetric
+            value={`${(benchmark?.precision_at_500 || 68.8).toFixed(2)}%`}
+            label="PRECISION @ 500"
+          />
+
+          <ModelMetric
+            value={`${(benchmark?.lift_at_500 || 7.96).toFixed(2)}×`}
+            label="LIFT"
+            highlight
+          />
+        </section>
+
+        <section className="demo-title">
+          <div>
+            <div className="eyebrow danger-text">
+              <AlertTriangle size={14} />
+              LIVE RETENTION INVESTIGATION
+            </div>
+
+            <h2>
+              Who should we save <span>first?</span>
+            </h2>
+
+            <p>
+              Customers are ranked by churn risk and business impact.
+              Select one to investigate the behavioural collapse.
+            </p>
+          </div>
+
+          {selected && (
+            <div className="case-id">
+              LIVE CASE
+              <strong>#{selected.customer_id}</strong>
+            </div>
+          )}
+        </section>
+
+        <section className="workspace">
+          <div className="queue-card">
+            <div className="card-header">
+              <div>
+                <span>PRIORITY QUEUE</span>
+                <h3>Customers requiring attention</h3>
+              </div>
+
+              <Zap size={20} />
+            </div>
+
+            <div className="queue-columns">
+              <span>#</span>
+              <span>CUSTOMER</span>
+              <span>RISK</span>
+              <span>VALUE</span>
+            </div>
+
+            <div className="queue-list">
+              {customers.slice(0, 20).map((customer) => (
+                <button
+                  type="button"
+                  key={customer.customer_id}
+                  onClick={() => selectCustomer(customer)}
+                  className={
+                    selected?.customer_id === customer.customer_id
+                      ? "queue-item active"
+                      : "queue-item"
+                  }
+                >
+                  <span className="rank">
+                    {String(customer.business_priority_rank).padStart(2, "0")}
+                  </span>
+
+                  <div className="customer-name">
+                    <strong>Customer {customer.customer_id}</strong>
+                    <small>{customer.retention_reason}</small>
+                  </div>
+
+                  <div
+                    className={`risk-badge ${riskClass(customer.risk_level)}`}
+                  >
+                    {Math.round(customer.risk_percentage)}%
+                  </div>
+
+                  <strong className="money">
+                    {money(customer.revenue_at_risk)}
+                  </strong>
+
+                  <ChevronRight size={16} />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {selected && (
+            <div className="intelligence">
+              <section className="customer-hero">
+                <div>
+                  <div className="eyebrow">CUSTOMER INTELLIGENCE</div>
+
+                  <h2>
+                    Customer <span>{selected.customer_id}</span>
+                  </h2>
+
+                  <p>
+                    Business Priority #{selected.business_priority_rank}
+                  </p>
+                </div>
+
+                <div className="risk-display">
+                  <span>AI CHURN RISK</span>
+
+                  <strong>
+                    {selected.risk_percentage.toFixed(2)}
+                    <small>%</small>
+                  </strong>
+
+                  <div className="critical-label">
+                    {selected.risk_level}
+                  </div>
+                </div>
+              </section>
+
+              <div className="customer-metrics">
+                <SmallMetric
+                  label="MONTHLY VALUE"
+                  value={money(selected.monthly_customer_value)}
+                />
+
+                <SmallMetric
+                  label="REVENUE AT RISK"
+                  value={money(selected.revenue_at_risk)}
+                  danger
+                />
+
+                <SmallMetric
+                  label="URGENCY"
+                  value={selected.action_urgency.toUpperCase()}
+                />
+              </div>
+
+              <BehaviourPanel data={behaviour} loading={customerLoading} />
+
+              <div className="reason-grid">
+                <div className="reason-card danger-card">
+                  <div className="reason-icon">
+                    <TrendingDown size={19} />
+                  </div>
+
+                  <div>
+                    <span>WHAT CHANGED?</span>
+                    <h3>Observed Behaviour</h3>
+                    <p>{selected.behaviour_signals}</p>
+                  </div>
+                </div>
+
+                <div className="reason-card ai-card">
+                  <div className="reason-icon">
+                    <BrainCircuit size={19} />
+                  </div>
+
+                  <div>
+                    <span>WHY DID AI FLAG THEM?</span>
+                    <h3>Model Explanation</h3>
+                    <p>{selected.model_explanation}</p>
+                  </div>
+                </div>
+              </div>
+
+              <section className="action-card">
+                <div className="action-header">
+                  <div>
+                    <div className="eyebrow">
+                      <Sparkles size={14} />
+                      AI RECOMMENDED INTERVENTION
+                    </div>
+
+                    <h2>Retention Playbook</h2>
+                  </div>
+
+                  <div className="recommended">RECOMMENDED</div>
+                </div>
+
+                <div className="action-info">
+                  <ActionMeta
+                    label="PRIMARY REASON"
+                    value={selected.retention_reason}
+                  />
+
+                  <ActionMeta
+                    label="CONTACT CHANNEL"
+                    value={selected.contact_channel}
+                  />
+
+                  <ActionMeta
+                    label="OFFER STRATEGY"
+                    value={selected.offer_level}
+                  />
+                </div>
+
+                <div className="action-message">
+                  <span>RECOMMENDED ACTION</span>
+                  <p>{selected.retention_action}</p>
+                </div>
+              </section>
+
+              <DecisionPanel
+                customer={selected}
+                onDecision={makeDecision}
+                onOutcome={saveOutcome}
+                savedOutcome={savedOutcome}
+              />
+            </div>
+          )}
+        </section>
+
+        <section className="architecture">
+          <div>
+            <div className="eyebrow">HOW IT WORKS</div>
+
+            <h2>
+              From raw behaviour to <span>business action.</span>
+            </h2>
+          </div>
+
+          <div className="architecture-flow">
+            <ArchitectureNode
+              icon={<Database />}
+              value="155"
+              label="RAW SIGNALS"
             />
 
-            <FeedbackCard
-              label="Customers Churned"
-              value={feedback?.churned ?? 0}
+            <ArrowRight />
+
+            <ArchitectureNode
+              icon={<Activity />}
+              value="42"
+              label="TEMPORAL GROUPS"
             />
 
-            <FeedbackCard
-              label="Still Monitoring"
-              value={
-                feedback?.still_monitoring ?? 0
-              }
+            <ArrowRight />
+
+            <ArchitectureNode
+              icon={<BrainCircuit />}
+              value="100D"
+              label="BEHAVIOUR INTERFACE"
+            />
+
+            <ArrowRight />
+
+            <ArchitectureNode
+              icon={<Target />}
+              value="XGB"
+              label="RISK RANKING"
+            />
+
+            <ArrowRight />
+
+            <ArchitectureNode
+              icon={<ShieldCheck />}
+              value="HITL"
+              label="HUMAN ACTION"
             />
           </div>
         </section>
+
+        <section className="feedback-section">
+          <div>
+            <div className="eyebrow">OUTCOME MEMORY</div>
+
+            <h2>
+              Every intervention creates
+              <span> future learning evidence.</span>
+            </h2>
+
+            <p>
+              Human decisions and real customer outcomes are stored as
+              evidence for future model evaluation and retraining.
+            </p>
+          </div>
+
+          <div className="feedback-cards">
+            <FeedbackCard
+              value={feedback?.retained || 0}
+              label="RETAINED"
+              type="good"
+            />
+
+            <FeedbackCard
+              value={feedback?.churned || 0}
+              label="CHURNED"
+              type="bad"
+            />
+
+            <FeedbackCard
+              value={feedback?.still_monitoring || 0}
+              label="MONITORING"
+              type="watch"
+            />
+          </div>
+        </section>
+
+        <footer>
+          <strong>CustomerPulse</strong>
+
+          <span>DEMUX 3.0 // AI FOR BUSINESS TRANSFORMATION</span>
+        </footer>
       </div>
     </main>
   );
 }
 
-function BehaviourSpotlight({
-  customer,
-  timeline,
-  onOpen,
+/* ============================================================
+   ONBOARDING COMPONENTS
+============================================================ */
+
+function MiniNode({
+  icon,
+  label,
 }: {
-  customer: Customer;
-  timeline: BehaviourPoint[];
-  onOpen: () => void;
+  icon: React.ReactNode;
+  label: string;
 }) {
-  const june = timeline.find(
-    (point) => point.month === "June"
-  );
-
-  const july = timeline.find(
-    (point) => point.month === "July"
-  );
-
-  const august = timeline.find(
-    (point) => point.month === "August"
-  );
-
   return (
-    <section className="mb-6 overflow-hidden rounded-2xl border border-cyan-400/30 bg-gradient-to-r from-cyan-400/[0.10] via-[#0b1729] to-[#0b1729]">
-      <div className="grid grid-cols-[1.1fr_1fr_auto] items-center gap-8 p-6">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-400 text-slate-950">
-              <Zap size={19} />
-            </div>
-
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">
-                Behaviour Spotlight
-              </p>
-
-              <p className="mt-1 text-xs text-slate-400">
-                Real high-risk customer with clear
-                behavioural deterioration
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-5 flex items-center gap-3">
-            <div>
-              <p className="text-2xl font-bold">
-                Customer {customer.customer_id}
-              </p>
-
-              <p className="mt-1 text-sm text-slate-300">
-                Business Priority #
-                {customer.business_priority_rank}
-              </p>
-            </div>
-
-            <RiskBadge
-              level={customer.risk_level}
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl border border-red-400/20 bg-red-400/[0.07] p-4">
-            <p className="text-xs text-slate-400">
-              Churn Risk
-            </p>
-
-            <p className="mt-1 text-2xl font-bold text-red-300">
-              {customer.risk_percentage.toFixed(2)}%
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-amber-400/20 bg-amber-400/[0.07] p-4">
-            <p className="text-xs text-slate-400">
-              Revenue at Risk
-            </p>
-
-            <p className="mt-1 text-2xl font-bold text-amber-300">
-              {money(customer.revenue_at_risk)}
-            </p>
-          </div>
-
-          <div className="col-span-2 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-            <div className="flex items-center gap-2">
-              <TrendingDown
-                size={15}
-                className="text-red-300"
-              />
-
-              <p className="text-xs uppercase tracking-wider text-slate-400">
-                Observed Behaviour
-              </p>
-            </div>
-
-            <p className="mt-2 text-sm font-semibold leading-6 text-slate-100">
-              {customer.behaviour_signals}
-            </p>
-          </div>
-        </div>
-
-        <button
-          onClick={onOpen}
-          className="group flex min-w-[190px] items-center justify-center gap-2 rounded-xl bg-cyan-400 px-5 py-4 text-sm font-bold text-slate-950 transition hover:bg-cyan-300"
-        >
-          View Intelligence
-
-          <ArrowRight
-            size={17}
-            className="transition-transform group-hover:translate-x-1"
-          />
-        </button>
-      </div>
-
-      {june && july && august ? (
-        <div className="grid grid-cols-4 border-t border-white/10 bg-black/10">
-          <SpotlightSignal
-            label="Revenue"
-            value={`${moneyShort(
-              june.revenue
-            )} → ${moneyShort(
-              july.revenue
-            )} → ${moneyShort(august.revenue)}`}
-          />
-
-          <SpotlightSignal
-            label="Recharge"
-            value={`${moneyShort(
-              june.recharge
-            )} → ${moneyShort(
-              july.recharge
-            )} → ${moneyShort(
-              august.recharge
-            )}`}
-          />
-
-          <SpotlightSignal
-            label="Incoming Calls"
-            value={`${number(
-              june.incoming_calls
-            )} → ${number(
-              july.incoming_calls
-            )} → ${number(
-              august.incoming_calls
-            )}`}
-          />
-
-          <SpotlightSignal
-            label="Outgoing Calls"
-            value={`${number(
-              june.outgoing_calls
-            )} → ${number(
-              july.outgoing_calls
-            )} → ${number(
-              august.outgoing_calls
-            )}`}
-          />
-        </div>
-      ) : (
-        <div className="border-t border-white/10 px-6 py-4 text-xs text-slate-400">
-          Loading verified behavioural history...
-        </div>
-      )}
-    </section>
+    <div className="mini-node">
+      {icon}
+      <span>{label}</span>
+    </div>
   );
 }
 
-function BehaviourTimeline({
+function ReadyMetric({
+  value,
+  label,
+  highlight = false,
+}: {
+  value: string;
+  label: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className={`ready-metric ${highlight ? "highlight" : ""}`}>
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+/* ============================================================
+   DASHBOARD COMPONENTS
+============================================================ */
+
+function MetricCard({
+  icon,
+  label,
+  value,
+  note,
+  danger = false,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  note: string;
+  danger?: boolean;
+}) {
+  return (
+    <div className={`metric-card ${danger ? "danger" : ""}`}>
+      <div className="metric-top">
+        <span>{label}</span>
+        <div>{icon}</div>
+      </div>
+
+      <strong>{value}</strong>
+      <p>{note}</p>
+    </div>
+  );
+}
+
+function ModelMetric({
+  value,
+  label,
+  highlight = false,
+}: {
+  value: string;
+  label: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className={`model-metric ${highlight ? "highlight" : ""}`}>
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function SmallMetric({
+  label,
+  value,
+  danger = false,
+}: {
+  label: string;
+  value: string;
+  danger?: boolean;
+}) {
+  return (
+    <div className={`small-metric ${danger ? "danger" : ""}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function BehaviourPanel({
   data,
   loading,
 }: {
@@ -1121,178 +1274,102 @@ function BehaviourTimeline({
 }) {
   if (loading) {
     return (
-      <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[0.03] p-5">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <TrendingUp
-            size={17}
-            className="animate-pulse text-cyan-400"
-          />
-
-          Loading behavioural history...
-        </div>
+      <div className="behaviour-card">
+        Loading customer behaviour...
       </div>
     );
   }
 
-  if (data.length === 0) {
+  const june = data.find((item) => item.month === "June");
+  const july = data.find((item) => item.month === "July");
+  const august = data.find((item) => item.month === "August");
+
+  if (!june || !july || !august) {
     return (
-      <div className="rounded-xl border border-white/10 bg-white/[0.025] p-5">
-        <p className="text-sm text-slate-300">
-          Behavioural history unavailable for this
-          customer.
-        </p>
+      <div className="behaviour-card">
+        Behaviour history unavailable.
       </div>
     );
   }
-
-  const maxRevenue = Math.max(
-    ...data.map((item) =>
-      Math.max(item.revenue, 0)
-    ),
-    1
-  );
-
-  const maxRecharge = Math.max(
-    ...data.map((item) =>
-      Math.max(item.recharge, 0)
-    ),
-    1
-  );
 
   return (
-    <div className="rounded-xl border border-cyan-400/15 bg-[#091727] p-5">
-      <div className="flex items-start justify-between">
+    <section className="behaviour-card">
+      <div className="card-header">
         <div>
-          <div className="flex items-center gap-2">
-            <TrendingUp
-              size={17}
-              className="text-cyan-400"
-            />
-
-            <p className="text-sm font-semibold">
-              Behaviour Timeline
-            </p>
-          </div>
-
-          <p className="mt-1 text-xs text-slate-300">
-            Real customer activity across June, July
-            and August
-          </p>
+          <span>VERIFIED CUSTOMER BEHAVIOUR</span>
+          <h3>3-Month Deterioration Trace</h3>
         </div>
 
-        <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold text-cyan-300">
-          3-Month History
-        </span>
+        <div className="deterioration">
+          <TrendingDown size={16} />
+          DETERIORATION DETECTED
+        </div>
       </div>
 
-      <div className="mt-5 space-y-5">
-        <TrendRow
-          icon={<IndianRupee size={15} />}
-          label="Revenue / ARPU"
-          values={data.map((item) => ({
-            month: item.month,
-            value: item.revenue,
-          }))}
-          max={maxRevenue}
-          formatter={(value) =>
-            money(Math.max(value, 0))
-          }
-        />
-
-        <TrendRow
-          icon={<WalletCards size={15} />}
-          label="Recharge Amount"
-          values={data.map((item) => ({
-            month: item.month,
-            value: item.recharge,
-          }))}
-          max={maxRecharge}
-          formatter={(value) =>
-            money(Math.max(value, 0))
-          }
-        />
+      <div className="month-head">
+        <span>BEHAVIOUR</span>
+        <strong>JUNE</strong>
+        <strong>JULY</strong>
+        <strong>AUGUST</strong>
       </div>
 
-      <div className="mt-5 grid grid-cols-3 gap-3">
-        {data.map((item) => (
-          <div
-            key={item.month}
-            className="rounded-lg border border-white/10 bg-white/[0.025] p-3"
-          >
-            <p className="text-xs font-bold text-slate-200">
-              {item.month}
-            </p>
+      <BehaviourRow
+        label="Revenue / ARPU"
+        june={money(june.revenue)}
+        july={money(july.revenue)}
+        august={money(august.revenue)}
+      />
 
-            <div className="mt-3 space-y-2 text-[11px] text-slate-300">
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5">
-                  <PhoneCall
-                    size={12}
-                    className="text-cyan-400"
-                  />
-                  Incoming
-                </span>
+      <BehaviourRow
+        label="Recharge"
+        june={money(june.recharge)}
+        july={money(july.recharge)}
+        august={money(august.recharge)}
+      />
 
-                <span className="font-semibold text-slate-100">
-                  {number(
-                    item.incoming_calls
-                  )}
-                </span>
-              </div>
+      <BehaviourRow
+        label="Incoming Calls"
+        june={number(june.incoming_calls)}
+        july={number(july.incoming_calls)}
+        august={number(august.incoming_calls)}
+      />
 
-              <div className="flex items-center justify-between gap-2">
-                <span>Outgoing</span>
+      <BehaviourRow
+        label="Outgoing Calls"
+        june={number(june.outgoing_calls)}
+        july={number(july.outgoing_calls)}
+        august={number(august.outgoing_calls)}
+      />
+    </section>
+  );
+}
 
-                <span className="font-semibold text-slate-100">
-                  {number(
-                    item.outgoing_calls
-                  )}
-                </span>
-              </div>
+function BehaviourRow({
+  label,
+  june,
+  july,
+  august,
+}: {
+  label: string;
+  june: string;
+  july: string;
+  august: string;
+}) {
+  return (
+    <div className="behaviour-row">
+      <strong>{label}</strong>
+      <span>{june}</span>
+      <span>{july}</span>
 
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5">
-                  <Wifi
-                    size={12}
-                    className="text-cyan-400"
-                  />
-                  2G
-                </span>
-
-                <span className="font-semibold text-slate-100">
-                  {number(
-                    item.internet_2g
-                  )}{" "}
-                  MB
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between gap-2">
-                <span>3G</span>
-
-                <span className="font-semibold text-slate-100">
-                  {number(
-                    item.internet_3g
-                  )}{" "}
-                  MB
-                </span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <p className="mt-4 text-[11px] leading-5 text-slate-400">
-        Raw behavioural history is shown separately
-        from SHAP explanations so the dashboard does
-        not imply a trend that the underlying customer
-        data does not support.
-      </p>
+      <span className="august-value">
+        {august}
+        <TrendingDown size={14} />
+      </span>
     </div>
   );
 }
 
-function SpotlightSignal({
+function ActionMeta({
   label,
   value,
 }: {
@@ -1300,85 +1377,173 @@ function SpotlightSignal({
   value: string;
 }) {
   return (
-    <div className="border-r border-white/10 px-6 py-4 last:border-r-0">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-        {label}
-      </p>
-
-      <p className="mt-1 text-sm font-bold text-slate-100">
-        {value}
-      </p>
+    <div>
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }
 
-function TrendRow({
+function DecisionPanel({
+  customer,
+  onDecision,
+  onOutcome,
+  savedOutcome,
+}: {
+  customer: Customer;
+  onDecision: (
+    decision: "Approved" | "Modified" | "Rejected"
+  ) => void;
+  onOutcome: (
+    outcome: "Retained" | "Churned" | "Still Monitoring"
+  ) => void;
+  savedOutcome: string | null;
+}) {
+  const pending =
+    !customer.human_decision || customer.human_decision === "Pending";
+
+  return (
+    <section className="human-card">
+      <div className="human-title">
+        <div className="human-icon">
+          <ShieldCheck size={24} />
+        </div>
+
+        <div>
+          <span>HUMAN-IN-THE-LOOP CONTROL</span>
+          <h2>Human makes the final call.</h2>
+
+          <p>
+            AI recommends. Your retention team remains in control.
+          </p>
+        </div>
+      </div>
+
+      {pending ? (
+        <div className="decision-buttons">
+          <button
+            type="button"
+            className="approve"
+            onClick={() => onDecision("Approved")}
+          >
+            <Check size={18} />
+            APPROVE ACTION
+          </button>
+
+          <button
+            type="button"
+            className="modify"
+            onClick={() => onDecision("Modified")}
+          >
+            <Pencil size={17} />
+            MODIFY
+          </button>
+
+          <button
+            type="button"
+            className="reject"
+            onClick={() => onDecision("Rejected")}
+          >
+            <X size={18} />
+            REJECT
+          </button>
+        </div>
+      ) : (
+        <div className="decision-result">
+          <div className="approved-message">
+            <CheckCircle2 size={22} />
+
+            <div>
+              <span>DECISION RECORDED</span>
+              <strong>{customer.human_decision}</strong>
+            </div>
+          </div>
+
+          <p>{customer.final_action}</p>
+
+          <div className="outcome-area">
+            <span>WHAT HAPPENED TO THIS CUSTOMER?</span>
+
+            <div>
+              <button
+                type="button"
+                onClick={() => onOutcome("Retained")}
+              >
+                <CheckCircle2 size={15} />
+                Retained
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onOutcome("Churned")}
+              >
+                <XCircle size={15} />
+                Churned
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onOutcome("Still Monitoring")}
+              >
+                <Clock3 size={15} />
+                Monitoring
+              </button>
+            </div>
+
+            {savedOutcome && (
+              <strong className="saved">
+                <Check size={15} />
+                Outcome stored: {savedOutcome}
+              </strong>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ArchitectureNode({
   icon,
+  value,
   label,
-  values,
-  max,
-  formatter,
 }: {
   icon: React.ReactNode;
+  value: string;
   label: string;
-  values: {
-    month: string;
-    value: number;
-  }[];
-  max: number;
-  formatter: (value: number) => string;
 }) {
   return (
-    <div>
-      <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-200">
-        <span className="text-cyan-400">
-          {icon}
-        </span>
-
-        {label}
-      </div>
-
-      <div className="grid grid-cols-3 gap-3">
-        {values.map((item) => {
-          const safeValue = Math.max(
-            item.value,
-            0
-          );
-
-          const percentage =
-            max > 0
-              ? (safeValue / max) * 100
-              : 0;
-
-          return (
-            <div key={item.month}>
-              <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px]">
-                <span className="text-slate-400">
-                  {item.month}
-                </span>
-
-                <span className="font-semibold text-slate-200">
-                  {formatter(item.value)}
-                </span>
-              </div>
-
-              <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-cyan-400 transition-all duration-500"
-                  style={{
-                    width: `${Math.max(
-                      percentage,
-                      safeValue > 0 ? 3 : 0
-                    )}%`,
-                  }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
+    <div className="architecture-node">
+      <div>{icon}</div>
+      <strong>{value}</strong>
+      <span>{label}</span>
     </div>
   );
+}
+
+function FeedbackCard({
+  value,
+  label,
+  type,
+}: {
+  value: number;
+  label: string;
+  type: string;
+}) {
+  return (
+    <div className={`feedback-card ${type}`}>
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+/* ============================================================
+   FORMATTERS
+============================================================ */
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en-IN").format(value);
 }
 
 function money(value: number) {
@@ -1386,13 +1551,7 @@ function money(value: number) {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
-  }).format(value);
-}
-
-function moneyShort(value: number) {
-  return `₹${new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 0,
-  }).format(Math.max(value, 0))}`;
+  }).format(Math.max(0, value));
 }
 
 function number(value: number) {
@@ -1401,180 +1560,606 @@ function number(value: number) {
   }).format(value);
 }
 
-function MetricCard({
-  icon,
-  label,
-  value,
-  important = false,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  important?: boolean;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-[#0b1729] p-5">
-      <div
-        className={`mb-4 flex h-9 w-9 items-center justify-center rounded-lg ${
-          important
-            ? "bg-amber-400/10 text-amber-300"
-            : "bg-white/5 text-cyan-300"
-        }`}
-      >
-        {icon}
-      </div>
-
-      <p className="text-xs text-slate-400">
-        {label}
-      </p>
-
-      <p
-        className={`mt-1 text-2xl font-bold ${
-          important ? "text-amber-300" : ""
-        }`}
-      >
-        {value}
-      </p>
-    </div>
-  );
+function riskClass(level: string) {
+  if (level === "Critical") return "critical";
+  if (level === "High") return "high";
+  if (level === "Medium") return "medium";
+  return "low";
 }
 
-function MiniCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+/* ============================================================
+   ONBOARDING CSS
+   Existing dashboard continues using globals.css.
+============================================================ */
+
+function OnboardingStyles() {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-      <p className="text-xs text-slate-400">
-        {label}
-      </p>
+    <style jsx global>{`
+      .onboarding-shell {
+        min-height: 100vh;
+        background:
+          radial-gradient(
+            circle at 50% 38%,
+            rgba(19, 177, 139, 0.1),
+            transparent 34%
+          ),
+          #f2f6f7;
+        color: #102b38;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
 
-      <p className="mt-1 text-lg font-bold">
-        {value}
-      </p>
-    </div>
-  );
-}
+      .onboarding-nav {
+        height: 88px;
+        padding: 0 6%;
+        background: #082837;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
 
-function DetailCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
-      <p className="text-xs text-slate-400">
-        {label}
-      </p>
+      .onboarding-nav .brand {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+      }
 
-      <p className="mt-2 text-sm font-semibold text-slate-100">
-        {value}
-      </p>
-    </div>
-  );
-}
+      .onboarding-nav .brand .logo {
+        width: 46px;
+        height: 46px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, #16b991, #07866d);
+        color: white;
+        box-shadow: 0 10px 28px rgba(9, 173, 132, 0.2);
+      }
 
-function RiskBadge({
-  level,
-}: {
-  level: string;
-}) {
-  const style =
-    level === "Critical"
-      ? "border-red-400/25 bg-red-400/10 text-red-300"
-      : level === "High"
-        ? "border-orange-400/25 bg-orange-400/10 text-orange-300"
-        : level === "Medium"
-          ? "border-yellow-400/25 bg-yellow-400/10 text-yellow-300"
-          : "border-emerald-400/25 bg-emerald-400/10 text-emerald-300";
+      .onboarding-nav .brand strong {
+        display: block;
+        font-size: 17px;
+        letter-spacing: -0.3px;
+      }
 
-  return (
-    <span
-      className={`w-fit rounded-full border px-3 py-1 text-xs font-semibold ${style}`}
-    >
-      {level}
-    </span>
-  );
-}
+      .onboarding-nav .brand span {
+        display: block;
+        color: #91aab5;
+        font-size: 10px;
+        margin-top: 3px;
+      }
 
-function InfoSection({
-  title,
-  text,
-  ai = false,
-}: {
-  title: string;
-  text: string;
-  ai?: boolean;
-}) {
-  return (
-    <div>
-      <div className="mb-2 flex items-center gap-2">
-        <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
-          {title}
-        </p>
+      .system-ready,
+      .scanning-status,
+      .ready-status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(54, 220, 176, 0.24);
+        background: rgba(21, 177, 139, 0.08);
+        color: #55dfbb;
+        font-size: 9px;
+        font-weight: 900;
+        letter-spacing: 1.2px;
+      }
 
-        {ai && (
-          <BrainCircuit
-            size={14}
-            className="text-cyan-400"
-          />
-        )}
-      </div>
+      .system-ready span,
+      .scanning-status span {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #42dcb4;
+        box-shadow: 0 0 10px #42dcb4;
+      }
 
-      <p className="text-sm leading-6 text-slate-200">
-        {text}
-      </p>
-    </div>
-  );
-}
+      .scanning-status span {
+        animation: cpPulse 0.8s infinite alternate;
+      }
 
-function BottomCard({
-  title,
-  value,
-  description,
-}: {
-  title: string;
-  value: string;
-  description: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-[#0b1729] p-5">
-      <p className="text-xs uppercase tracking-wider text-slate-400">
-        {title}
-      </p>
+      .onboarding-hero {
+        min-height: calc(100vh - 145px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 70px 24px 80px;
+      }
 
-      <p className="mt-2 text-2xl font-bold text-cyan-300">
-        {value}
-      </p>
+      .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: #e5f7f1;
+        color: #07836a;
+        font-size: 9px;
+        font-weight: 900;
+        letter-spacing: 1.4px;
+        border: 1px solid #cbece2;
+      }
 
-      <p className="mt-2 text-xs leading-5 text-slate-300">
-        {description}
-      </p>
-    </div>
-  );
-}
+      .onboarding-hero h1,
+      .processing-main h1,
+      .ready-layout h1 {
+        margin: 20px 0 16px;
+        font-size: clamp(44px, 5.5vw, 76px);
+        line-height: 0.98;
+        letter-spacing: -4px;
+        color: #102b38;
+      }
 
-function FeedbackCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
-      <p className="text-xs text-slate-400">
-        {label}
-      </p>
+      .onboarding-hero h1 span,
+      .processing-main h1 span,
+      .ready-layout h1 span {
+        color: #0b9b7b;
+      }
 
-      <p className="mt-2 text-xl font-bold">
-        {value.toLocaleString()}
-      </p>
-    </div>
+      .onboarding-hero > p {
+        max-width: 780px;
+        margin: 0;
+        color: #70858e;
+        line-height: 1.8;
+        font-size: 14px;
+      }
+
+      .hero-upload,
+      .enter-command {
+        margin-top: 34px;
+        border: none;
+        border-radius: 13px;
+        background: #0b9d7d;
+        color: white;
+        padding: 17px 22px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 13px;
+        font-weight: 850;
+        cursor: pointer;
+        box-shadow: 0 15px 35px rgba(11, 157, 125, 0.2);
+        transition:
+          transform 0.18s ease,
+          box-shadow 0.18s ease,
+          background 0.18s ease;
+      }
+
+      .hero-upload:hover,
+      .enter-command:hover {
+        transform: translateY(-2px);
+        background: #078e71;
+        box-shadow: 0 18px 40px rgba(11, 157, 125, 0.28);
+      }
+
+      .hero-upload svg:last-child {
+        margin-left: 7px;
+      }
+
+      .upload-note {
+        margin-top: 14px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: #8b9ca3;
+        font-size: 10px;
+      }
+
+      .mini-pipeline {
+        margin-top: 60px;
+        padding: 13px 16px;
+        border: 1px solid #dbe6e9;
+        background: rgba(255, 255, 255, 0.78);
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: #91a1a8;
+        box-shadow: 0 12px 35px rgba(26, 56, 69, 0.04);
+      }
+
+      .mini-node {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: #58717b;
+      }
+
+      .mini-node svg {
+        color: #0b9d7d;
+      }
+
+      .mini-node span {
+        font-size: 8px;
+        font-weight: 900;
+        letter-spacing: 1px;
+      }
+
+      .onboarding-bottom {
+        height: 57px;
+        display: grid;
+        place-items: center;
+        color: #9aa9af;
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: 1.3px;
+      }
+
+      /* PROCESSING */
+
+      .processing-layout {
+        min-height: calc(100vh - 88px);
+        max-width: 1250px;
+        margin: 0 auto;
+        padding: 70px 5%;
+        display: grid;
+        grid-template-columns: 0.9fr 1.1fr;
+        gap: 70px;
+        align-items: center;
+      }
+
+      .processing-main > p {
+        color: #70858e;
+        line-height: 1.7;
+        max-width: 550px;
+        font-size: 13px;
+      }
+
+      .progress-wrap {
+        margin-top: 45px;
+        max-width: 540px;
+      }
+
+      .progress-top {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        color: #71858d;
+        font-size: 8px;
+        font-weight: 900;
+        letter-spacing: 1.2px;
+      }
+
+      .progress-top strong {
+        color: #0a9678;
+        font-size: 11px;
+      }
+
+      .progress-track {
+        height: 8px;
+        background: #dfe8ea;
+        border-radius: 999px;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #0b9d7d, #3ed6af);
+        border-radius: inherit;
+        transition: width 0.55s ease;
+      }
+
+      .processing-card {
+        background: #082837;
+        color: white;
+        border-radius: 20px;
+        padding: 27px;
+        box-shadow: 0 25px 70px rgba(8, 40, 55, 0.18);
+      }
+
+      .processing-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .processing-card-head span {
+        display: block;
+        color: #5bdfbd;
+        font-size: 8px;
+        font-weight: 900;
+        letter-spacing: 1.3px;
+      }
+
+      .processing-card-head strong {
+        display: block;
+        margin-top: 6px;
+        font-size: 13px;
+      }
+
+      .processing-card-head svg {
+        color: #4dddb9;
+      }
+
+      .processing-steps {
+        padding-top: 8px;
+      }
+
+      .processing-step {
+        display: flex;
+        gap: 14px;
+        padding: 14px 0;
+        opacity: 0.3;
+        transition: opacity 0.35s ease;
+      }
+
+      .processing-step.complete {
+        opacity: 1;
+      }
+
+      .step-indicator {
+        flex: 0 0 31px;
+        width: 31px;
+        height: 31px;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        background: rgba(255, 255, 255, 0.06);
+        color: #77919c;
+        font-size: 8px;
+        font-weight: 900;
+      }
+
+      .processing-step.complete .step-indicator {
+        background: rgba(27, 190, 149, 0.14);
+        color: #55dfbb;
+        border: 1px solid rgba(67, 219, 181, 0.2);
+      }
+
+      .processing-step strong {
+        display: block;
+        font-size: 11px;
+      }
+
+      .processing-step span {
+        display: block;
+        color: #819aa5;
+        margin-top: 4px;
+        font-size: 9px;
+        line-height: 1.4;
+      }
+
+      /* READY */
+
+      .ready-layout {
+        min-height: calc(100vh - 88px);
+        max-width: 950px;
+        margin: 0 auto;
+        padding: 58px 24px 80px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+
+      .ready-check {
+        width: 65px;
+        height: 65px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: #0b9d7d;
+        color: white;
+        box-shadow: 0 15px 35px rgba(11, 157, 125, 0.2);
+        margin-bottom: 18px;
+      }
+
+      .ready-layout h1 {
+        font-size: clamp(43px, 5vw, 66px);
+        margin-top: 17px;
+        margin-bottom: 12px;
+      }
+
+      .ready-layout > p {
+        color: #768a93;
+        margin: 0;
+        font-size: 12px;
+      }
+
+      .ready-metrics {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 11px;
+        margin-top: 32px;
+      }
+
+      .ready-metric {
+        background: white;
+        border: 1px solid #dce6e9;
+        border-radius: 13px;
+        padding: 18px;
+      }
+
+      .ready-metric.highlight {
+        background: #eaf8f4;
+        border-color: #c9e9df;
+      }
+
+      .ready-metric strong {
+        display: block;
+        font-size: 24px;
+        color: #17323e;
+      }
+
+      .ready-metric.highlight strong {
+        color: #078e71;
+      }
+
+      .ready-metric span {
+        display: block;
+        margin-top: 5px;
+        color: #87989f;
+        font-size: 7px;
+        font-weight: 900;
+        letter-spacing: 1px;
+      }
+
+      .dimension-result {
+        width: 100%;
+        margin-top: 13px;
+        padding: 23px 28px;
+        border-radius: 16px;
+        background: #082837;
+        color: white;
+        display: grid;
+        grid-template-columns: 1fr 1.4fr;
+        align-items: center;
+        text-align: left;
+      }
+
+      .dimension-number span,
+      .dimension-number small {
+        display: block;
+        color: #7f9aa5;
+        font-size: 7px;
+        font-weight: 900;
+        letter-spacing: 1.2px;
+      }
+
+      .dimension-number strong {
+        display: block;
+        color: #50dfbb;
+        font-size: 42px;
+        line-height: 1;
+        margin: 6px 0;
+      }
+
+      .dimension-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .dimension-stats > div {
+        padding: 14px 17px;
+        background: rgba(255, 255, 255, 0.045);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 11px;
+      }
+
+      .dimension-stats strong {
+        display: block;
+        color: white;
+        font-size: 23px;
+      }
+
+      .dimension-stats span {
+        display: block;
+        margin-top: 4px;
+        color: #7f99a4;
+        font-size: 7px;
+        font-weight: 900;
+        letter-spacing: 0.8px;
+      }
+
+      .validation-pill {
+        margin-top: 13px;
+        width: 100%;
+        border: 1px solid #cee9e1;
+        background: #eaf8f4;
+        color: #087e65;
+        border-radius: 12px;
+        padding: 13px 17px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 11px;
+      }
+
+      .validation-pill span {
+        display: block;
+        text-align: left;
+        font-size: 7px;
+        font-weight: 900;
+        letter-spacing: 1px;
+      }
+
+      .validation-pill strong {
+        display: block;
+        text-align: left;
+        margin-top: 3px;
+        font-size: 10px;
+      }
+
+      .enter-command {
+        margin-top: 24px;
+      }
+
+      .enter-command:disabled {
+        opacity: 0.7;
+        cursor: wait;
+      }
+
+      .change-dataset {
+        margin-top: 13px;
+        border: none;
+        background: transparent;
+        color: #788c94;
+        font-size: 10px;
+        font-weight: 750;
+        cursor: pointer;
+      }
+
+      .spin-icon {
+        animation: cpSpin 0.8s linear infinite;
+      }
+
+      @keyframes cpSpin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @keyframes cpPulse {
+        from {
+          opacity: 0.35;
+          transform: scale(0.8);
+        }
+
+        to {
+          opacity: 1;
+          transform: scale(1.15);
+        }
+      }
+
+      @media (max-width: 850px) {
+        .processing-layout {
+          grid-template-columns: 1fr;
+          gap: 35px;
+        }
+
+        .ready-metrics {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .dimension-result {
+          grid-template-columns: 1fr;
+          gap: 18px;
+        }
+
+        .mini-pipeline {
+          max-width: 100%;
+          overflow-x: auto;
+        }
+
+        .onboarding-hero h1,
+        .processing-main h1,
+        .ready-layout h1 {
+          letter-spacing: -2px;
+        }
+      }
+    `}</style>
   );
 }
